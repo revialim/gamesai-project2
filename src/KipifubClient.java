@@ -1,6 +1,8 @@
+import javafx.geometry.Pos;
 import lenz.htw.kipifub.ColorChange;
 import lenz.htw.kipifub.net.NetworkClient;
 
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +26,8 @@ import java.util.List;
 
 public class KipifubClient {
   int playerNumber;
+  Node[][] graph;
+  int nodeSpacing;
 
   KipifubClient(int playerNumber){
     this.playerNumber = playerNumber;
@@ -36,7 +40,8 @@ public class KipifubClient {
 
     KipifubClient player = new KipifubClient(networkClient.getMyPlayerNumber()); // 0 = rot, 1 = grün, 2 = blau
 
-    Node[][] graph = calcNavGraph(networkClient, 1);
+    player.nodeSpacing = 1;
+    player.graph = calcNavGraph(networkClient, player.nodeSpacing);
 
 
     ColorChange colorChange;
@@ -44,12 +49,18 @@ public class KipifubClient {
 
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
         //verarbeiten von colorChange
-        player.handleColorChange(colorChange);
+        MoveDirection nextMove = player.handleColorChange(colorChange);
+        if(nextMove != null){
+          networkClient.setMoveDirection(nextMove.bot, nextMove.x, nextMove.y);
+        }
       }
 
-      networkClient.setMoveDirection(0, 1.0f, 1.0f);
-      networkClient.setMoveDirection(1, 0.0f, 1.0f);
-      networkClient.setMoveDirection(2, 1.0f, 0.0f);
+
+      //networkClient.setMoveDirection(0, 1.0f, 1.0f);
+      //networkClient.setMoveDirection(1, 0.0f, 1.0f);
+      //networkClient.setMoveDirection(2, 1.0f, 0.0f);
+
+
 
     }
 
@@ -58,37 +69,88 @@ public class KipifubClient {
     //}
   }
 
-  void handleColorChange(ColorChange colChange){
+  MoveDirection handleColorChange(ColorChange colChange){
     if(colChange.player != playerNumber){
       //update representation or something similar...
 
       System.out.println("other colorChange...");
-      System.out.println(
-          "colorChange: player: "+ colChange.player
-          +", bot:"+colChange.bot
-          +", x: "+colChange.x
-          +", y: "+colChange.y);
+      System.out.println(colChange.toString());
+      //System.out.println(
+      //    "colorChange: player: "+ colChange.player
+      //    +", bot:"+colChange.bot
+      //    +", x: "+colChange.x
+      //    +", y: "+colChange.y);
+      return null;
 
     } else {
       //player is me
       System.out.println("my colorChange...");
-      System.out.println(
-          "colorChange: player: "+ colChange.player
-              +", bot:"+colChange.bot
-              +", x: "+colChange.x
-              +", y: "+colChange.y);
+      System.out.println(colChange.toString());
+      //System.out.println(
+      //    "colorChange: player: "+ colChange.player
+      //        +", bot:"+colChange.bot
+      //        +", x: "+colChange.x
+      //        +", y: "+colChange.y);
+
+
+      //Set/update own bots move direction
+      Position currentPosition = new Position(colChange.x, colChange.y);
+      //Position goal = new Position(500,500);
+      return nextMoveDirection(colChange.bot, currentPosition);
     }
   }
 
-  MoveDirection nextMoveDirection(Position currentPosition){
+  MoveDirection nextMoveDirection(int bot, Position currentPosition){
+    Node n  = new Node(currentPosition.x/nodeSpacing, currentPosition.y/nodeSpacing);
     // check up left bottom right for walkability
+   // boolean[] walkables = new boolean[4];
+    Position newGoal = null;
+    List<Position> possibleGoals = new ArrayList<>();
 
-    // choose random direction from walkable directions
+    if(isWalkableNode(new Node(n.x-1, n.y))){
+      //left
+      possibleGoals.add(new Position(currentPosition.x - nodeSpacing, currentPosition.y));
+      //newGoal = new Position(currentPosition.x - nodeSpacing, currentPosition.y);
+    } else if(isWalkableNode(new Node(n.x+1, n.y))){
+      //right
+      possibleGoals.add(new Position(currentPosition.x + nodeSpacing, currentPosition.y));
+      //newGoal = new Position(currentPosition.x + nodeSpacing, currentPosition.y);
+    } else if(isWalkableNode(new Node(n.x, n.y-1))) {
+      //up
+      possibleGoals.add(new Position(currentPosition.x, currentPosition.y - nodeSpacing));
+      //newGoal = new Position(currentPosition.x, currentPosition.y - nodeSpacing);
+    } else if(isWalkableNode(new Node(n.x, n.y+1))) {
+      //down
+      possibleGoals.add(new Position(currentPosition.x, currentPosition.y + nodeSpacing));
+      //newGoal = new Position(currentPosition.x, currentPosition.y + nodeSpacing);
+    }
 
-    return null;
+    int randomIndex = (int) Math.random() * (possibleGoals.size()-1);
+    System.out.println("possibleGoals: "+possibleGoals.size()+", random: "+ randomIndex);
+    newGoal = possibleGoals.get(randomIndex);
+
+    if(newGoal != null){
+      return walkToGoal(bot, currentPosition, newGoal);
+    } else {
+      //if nothing around pos is walkable...
+      return null;
+    }
   }
 
-//todo make graph spaced flexible...
+  boolean isWalkableNode(Node node){
+    if(graph[node.x][node.y] != null){
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  //method for determining move direction according to goal and current position
+  static MoveDirection walkToGoal(int bot, Position currPosition, Position goal){
+    // -currPosition + goal --> move direction vector
+    return new MoveDirection(bot, goal.x - currPosition.x, goal.y - currPosition.y);
+  }
+
   static Node[][] calcNavGraph(NetworkClient networkClient, int nodeSpacing){
 //create graph for board
     int numberOfNodes = 1024/nodeSpacing;
@@ -96,7 +158,7 @@ public class KipifubClient {
 
     for(int x = 0; x < numberOfNodes; x++){
       for(int y = 0; y < numberOfNodes; y++){
-        if(networkClient.isWalkable(x*nodeSpacing,y*nodeSpacing)){
+        if(networkClient.isWalkable(x/nodeSpacing,y/nodeSpacing)){
           //make node, write node in list of nodes...
           Node n = new Node(x, y);
           graph[x][y] = n;
@@ -143,12 +205,10 @@ public class KipifubClient {
   }
 
   static class Position {
-    int bot;
     int x;
     int y;
 
-    Position(int bot, int x, int y){
-      this.bot = bot;
+    Position(int x, int y){
       this.x = x;
       this.y = y;
     }
