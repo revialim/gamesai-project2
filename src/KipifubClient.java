@@ -4,8 +4,8 @@ import lenz.htw.kipifub.net.NetworkClient;
 
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -27,8 +27,9 @@ import java.util.concurrent.TimeUnit;
 
 public class KipifubClient {
   int playerNumber;
-  Node[][] graph;
+  AreaNode[][] graph;
   int nodeSpacing;
+  int[][] board;
 
   KipifubClient(int playerNumber){
     this.playerNumber = playerNumber;
@@ -41,16 +42,17 @@ public class KipifubClient {
 
 
     player.nodeSpacing = 50;
-    player.graph = calcNavGraph(networkClient, player.nodeSpacing);
+    player.graph = player.calcNavGraph(networkClient, player.nodeSpacing);
 
 
+    Position currentGoal = new Position(0,0);
     ColorChange colorChange;
     while(networkClient.isAlive()) {
 
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
 
         //verarbeiten von colorChange
-        MoveDirection nextMove = player.handleColorChange(colorChange);
+        MoveDirection nextMove = player.handleColorChange(colorChange, currentGoal);
         //try {
         //  TimeUnit.SECONDS.sleep(1);
         //} catch (InterruptedException e) {
@@ -58,13 +60,15 @@ public class KipifubClient {
         //}
 
         if(nextMove != null){
-          networkClient.setMoveDirection(nextMove.bot, nextMove.x, nextMove.y);
+          //set or update move direction and currentGoal information
+          networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
+          currentGoal = new Position(nextMove.goal.x, nextMove.goal.y);
         }
       }
     }
   }
 
-  MoveDirection handleColorChange(ColorChange colChange){
+  MoveDirection handleColorChange(ColorChange colChange, Position currentGoal){
     if(colChange.player != playerNumber){
       //update representation or something similar...
 
@@ -82,10 +86,24 @@ public class KipifubClient {
       System.out.println("my colorChange...");
       System.out.println(colChange.toString());
 
-      //Set/update own bots move direction
       Position currentPosition = new Position(colChange.x, colChange.y);
-      return nextMoveDirection(colChange.bot, currentPosition);
+      //todo check if goal for certain bot was reached
+      if(goalWasReached(colChange.bot, currentPosition, currentGoal)){
+        return nextMoveDirection(colChange.bot, currentPosition);
+      }
+      //Set/update own bots move direction
     }
+
+    return null;
+  }
+
+
+  //method for determining if goal was reached
+  static boolean goalWasReached(int bot, Position currentPos, Position goal){
+    return (currentPos.x <= goal.x+10)
+        && (currentPos.y <= goal.y+10)
+        && (currentPos.x >= goal.x-10)
+        && (currentPos.y >= goal.y-10);
   }
 
   MoveDirection nextMoveDirection(int bot, Position currentPosition){
@@ -109,9 +127,11 @@ public class KipifubClient {
     }
 
     if(possibleGoals.size() > 0){
-      int randomIndex = (int) Math.random() * (possibleGoals.size()-1);
-      System.out.println("possibleGoals: "+possibleGoals.size()+", random: "+ randomIndex);
-      newGoal = possibleGoals.get(randomIndex);
+      //int randomIndex = (int) (Math.random() * (possibleGoals.size()-1));
+      //System.out.println("possibleGoals: "+possibleGoals.size()+", random: "+ randomIndex);
+      //newGoal = possibleGoals.get(randomIndex);
+      Collections.shuffle(possibleGoals);
+      newGoal = possibleGoals.get(0);
     }
 
     if(newGoal != null){
@@ -123,30 +143,27 @@ public class KipifubClient {
   }
 
   boolean isWalkableNode(Position nodePos){
-    if(graph[nodePos.x][nodePos.y] != null){
-      return true;
-    } else {
-      return false;
-    }
+    return (graph[nodePos.x][nodePos.y] != null);
   }
 
   //method for determining move direction according to goal and current position
   static MoveDirection walkToGoal(int bot, Position currPosition, Position goal){
     // -currPosition + goal --> move direction vector
-    return new MoveDirection(bot, goal.x - currPosition.x, goal.y - currPosition.y);
+    Position moveDirection = new Position(goal.x - currPosition.x, goal.y - currPosition.y);
+    return new MoveDirection(bot, goal, moveDirection);
   }
 
-  static Node[][] calcNavGraph(NetworkClient networkClient, int nodeSpacing){
+  AreaNode[][] calcNavGraph(NetworkClient networkClient, int nodeSpacing){
     //create graph for board
     int numberOfNodes = 1024/nodeSpacing;
-    Node[][] graph = new Node[numberOfNodes][numberOfNodes];
+    AreaNode[][] graph = new AreaNode[numberOfNodes][numberOfNodes];
 
     for(int x = 0; x < numberOfNodes; x++){
       for(int y = 0; y < numberOfNodes; y++){
         if(networkClient.isWalkable(x*nodeSpacing,y*nodeSpacing)){
           System.out.println("scaled x: "+x*nodeSpacing +", scaled y: "+ y*nodeSpacing+" is walkable");
           //make node, write node in list of nodes...
-          Node n = new Node(x, y);
+          AreaNode n = new AreaNode(x, y);
           graph[x][y] = n;
         }
       }
@@ -179,49 +196,109 @@ public class KipifubClient {
     return graph;
   }
 
+  private int getBoard(Position pos){
+    return board[pos.x][pos.y];
+  }
+
   //todo create modified quad tree
 
   // Quad Tree Node
   static class QTNode {
     //nodes from graph that belong to the quad tree element's area
-    List<Node> areaNodes;
+    List<AreaNode> areaNodes;
+
+    List<QTNode> children;
 
     //contains the QTNodes which contain information of this nodes subdivisions
     //if empty, then this node contains an area with smalles configured resolution
-    List<QTNode> children;
 
-    int size;//this areas size .. todo decide whether to use resolution or absolute number of pixels
-    Position position;//this nodes origin... todo decide whether to use area's center or top left corner
+
+    int width;//this area's width
+    int height;//this area's height
+
+    Position position;//this nodes origin; area's center
+
+
   }
 
-  static class Node {
-    int x;
-    int y;
-    List<Node> neighbors = new ArrayList<>();
+  /**
+   * AreaNode Class
+   *
+   */
+  class AreaNode {
+    final Position position;
+    final Position upperleft;
+    final Position bottomright;
 
-    Node(int x, int y){
-      this.x = x;
-      this.y = y;
+    List<AreaNode> neighbors = new ArrayList<>();
+
+    AreaNode(int x, int y){
+      this.position = new Position(x, y);
+      this.upperleft = new Position(
+          position.x - (nodeSpacing/2),
+          position.y - (nodeSpacing/2));
+      this.bottomright = new Position(
+          position.x + (nodeSpacing/2) + (nodeSpacing%2),
+          position.y + (nodeSpacing/2) + (nodeSpacing%2));
     }
-  }
 
-  static class Position {
-    int x;
-    int y;
 
-    Position(int x, int y){
-      this.x = x;
-      this.y = y;
+    public int getMeanColor(){
+      if(nodeSpacing > 1){
+        return calcMeanColor(upperleft, bottomright);
+      }
+      else if(nodeSpacing == 1){
+        return getBoard(position);
+      } else {
+        throw new IllegalStateException("Illegal nodeSpacing: "+ nodeSpacing);
+      }
     }
+
+    private int calcMeanColor(Position start, Position end){
+      int r = 0;
+      int g = 0;
+      int b = 0;
+      int sum = 0;
+
+      for(int i = start.x; i <= end.x; i++){
+        for(int j = start.y; j <= end.y; j++){
+          int rgb = getBoard(new Position(i, j));
+          r = r + (rgb >> 16) & 255;
+          g = g + (rgb >> 8) & 255;
+          b = b + rgb  & 255;
+          sum++;
+        }
+      }
+
+      r = r/sum;
+      g = g/sum;
+      b = b/sum;
+
+      Color mean = new Color(r, g, b);
+
+      return mean.getRGB();
+    }
+
+
   }
 
   static class MoveDirection {
-    int bot;
-    int x;
-    int y;
+    final int bot;
+    final Position goal;
+    final Position direction;
     //x y compose the vector for the move direction
-    MoveDirection(int bot, int x, int y){
+    MoveDirection(int bot, Position goal, Position direction){
       this.bot = bot;
+      this.goal = goal;
+      this.direction = direction;
+    }
+  }
+  
+  static class Position {
+    final int x;
+    final int y;
+
+    Position(int x, int y){
       this.x = x;
       this.y = y;
     }
