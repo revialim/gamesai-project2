@@ -1,4 +1,3 @@
-import javafx.geometry.Pos;
 import lenz.htw.kipifub.ColorChange;
 import lenz.htw.kipifub.net.NetworkClient;
 
@@ -87,7 +86,7 @@ public class KipifubClient {
       System.out.println(colChange.toString());
 
       Position currentPosition = new Position(colChange.x, colChange.y);
-      //todo check if goal for certain bot was reached
+      //check if goal for certain bot was reached
       if(goalWasReached(colChange.bot, currentPosition, currentGoal)){
         return nextMoveDirection(colChange.bot, currentPosition);
       }
@@ -200,52 +199,114 @@ public class KipifubClient {
     return board[pos.x][pos.y];
   }
 
+  private static int calcMeanColor(int[] colors){
+    int sum = 0;
+    int r = 0;
+    int g = 0;
+    int b = 0;
+
+    for(int color : colors){
+      //the mean color of the child should be the updated mean color now
+      r = r + (color >> 16) & 255;
+      g = g + (color >> 8) & 255;
+      b = b + color  & 255;
+      sum++;
+    }
+
+    r = r/sum;
+    g = g/sum;
+    b = b/sum;
+
+    Color mean = new Color(r, g, b);
+
+    return mean.getRGB();
+  }
+
+
   //todo create modified quad tree
 
   // Quad Tree Node
   static class QTNode {
-    //nodes from graph that belong to the quad tree element's area
-    List<AreaNode> areaNodes;
-
-    List<QTNode> children;
-
-    //contains the QTNodes which contain information of this nodes subdivisions
-    //if empty, then this node contains an area with smalles configured resolution
-
+    int depth;//depth of tree node
+    // while 0 depth means this node is a child
 
     int width;//this area's width
     int height;//this area's height
-
     Position position;//this nodes origin; area's center
 
+    Position upperLeft = new Position(position.x - width/2, position.y - height/2); //include in area
+    Position lowerRight = new Position(position.x + width/2 + width%2, position.y + height/2 + height%2); //exclude from area
+
+    //mean color of the QTNode's area
+    int meanColor;
+
+    //nodes from graph that belong to the quad tree element's area
+    List<AreaNode> areaNodes;
+
+    //contains the QTNodes which contain information of this nodes subdivisions
+    //if empty, then this node contains an area with smallest configured resolution
+    List<QTNode> children;
+
+    QTNode(){
+      //todo setup meanColor, updateMeanColor();
+      //todo create children (if needed), depending on "depth" of the quad tree
+    }
+
+    void updateMeanColor(Position hit){
+      if((hit.x >= upperLeft.x && hit.y >= upperLeft.y)&&(hit.x < lowerRight.x && hit.y < lowerRight.y)){
+        //update mean color of children
+        int[] colors = new int[children.size()];
+        int i = 0;
+
+        for(QTNode child : children){
+          child.updateMeanColor(hit);
+          //the mean color of the child should be the updated mean color now
+          colors[i] = child.meanColor;
+          i++;
+        }
+
+        meanColor = calcMeanColor(colors);
+      }
+    }
 
   }
 
   /**
    * AreaNode Class
-   *
+   * Stores information of an area
+   * including:
+   *   position,
+   *   mean color and
+   *   direct neighbors
    */
   class AreaNode {
     final Position position;
-    final Position upperleft;
-    final Position bottomright;
+    final Position upperLeft;
+    final Position bottomRight;
 
     List<AreaNode> neighbors = new ArrayList<>();
 
     AreaNode(int x, int y){
       this.position = new Position(x, y);
-      this.upperleft = new Position(
+      this.upperLeft = new Position(
           position.x - (nodeSpacing/2),
           position.y - (nodeSpacing/2));
-      this.bottomright = new Position(
+      this.bottomRight = new Position(
           position.x + (nodeSpacing/2) + (nodeSpacing%2),
           position.y + (nodeSpacing/2) + (nodeSpacing%2));
     }
 
-
+    /**
+     * Call from outside to always get up-to-date mean color
+     * (not cached)
+     * If area size is one pixel, the color of that pixel is
+     * returned. Otherwise the mean color of the area is
+     * calculated in calcMeanColor.
+     * @return mean color of this areaNode's pixels
+     */
     public int getMeanColor(){
       if(nodeSpacing > 1){
-        return calcMeanColor(upperleft, bottomright);
+        return calcMeanColor(upperLeft, bottomRight);
       }
       else if(nodeSpacing == 1){
         return getBoard(position);
@@ -255,30 +316,18 @@ public class KipifubClient {
     }
 
     private int calcMeanColor(Position start, Position end){
-      int r = 0;
-      int g = 0;
-      int b = 0;
-      int sum = 0;
+      int[] colors = new int[(end.x-start.x+1)*(end.y-start.y+1)];
+      int i = 0;
 
-      for(int i = start.x; i <= end.x; i++){
-        for(int j = start.y; j <= end.y; j++){
-          int rgb = getBoard(new Position(i, j));
-          r = r + (rgb >> 16) & 255;
-          g = g + (rgb >> 8) & 255;
-          b = b + rgb  & 255;
-          sum++;
+      for(int x = start.x; x <= end.x; x++){
+        for(int y = start.y; y <= end.y; y++){
+          colors[i] = getBoard(new Position(x, y));
+          i++;
         }
       }
 
-      r = r/sum;
-      g = g/sum;
-      b = b/sum;
-
-      Color mean = new Color(r, g, b);
-
-      return mean.getRGB();
+      return KipifubClient.calcMeanColor(colors);
     }
-
 
   }
 
@@ -293,7 +342,7 @@ public class KipifubClient {
       this.direction = direction;
     }
   }
-  
+
   static class Position {
     final int x;
     final int y;
