@@ -1,7 +1,9 @@
 import lenz.htw.kipifub.ColorChange;
 import lenz.htw.kipifub.net.NetworkClient;
 
+import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,38 +27,45 @@ import java.util.List;
  */
 
 public class KipifubClient {
-  int playerNumber;
-  AreaNode[][] graph;
-  int nodeSpacing;
-  int[][] board;
+  final static int size = 1024;
 
-  KipifubClient(int playerNumber){
+  int playerNumber;
+  NavNode[][] navigationNodes;
+  int nodeSpacing;
+  NetworkClient networkClient;
+
+  KipifubClient(int playerNumber, int nodeSpacing, NetworkClient networkClient){
     this.playerNumber = playerNumber;
+    this.nodeSpacing = nodeSpacing;
+    this.navigationNodes = calcNavGraph(networkClient, nodeSpacing);
+    this.networkClient = networkClient;
+
+    //initialize quad tree
+    QTNode qtRoot = new QTNode(2, new Position(size/2, size/2), size);
   }
 
   public static void main(String[] args) {
     NetworkClient networkClient = new NetworkClient(null, "a");
 
-    KipifubClient player = new KipifubClient(networkClient.getMyPlayerNumber()); // 0 = rot, 1 = grün, 2 = blau
+    KipifubClient player = new KipifubClient(
+        networkClient.getMyPlayerNumber(),
+        50,
+        networkClient); // 0 = rot, 1 = grün, 2 = blau
 
-
-    player.nodeSpacing = 50;
-    player.graph = player.calcNavGraph(networkClient, player.nodeSpacing);
-
+    new Painter(player);
 
     Position currentGoal = new Position(0,0);
     ColorChange colorChange;
+
+
+
+
     while(networkClient.isAlive()) {
 
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
 
         //verarbeiten von colorChange
         MoveDirection nextMove = player.handleColorChange(colorChange, currentGoal);
-        //try {
-        //  TimeUnit.SECONDS.sleep(1);
-        //} catch (InterruptedException e) {
-        //  e.printStackTrace();
-        //}
 
         if(nextMove != null){
           //set or update move direction and currentGoal information
@@ -67,45 +76,79 @@ public class KipifubClient {
     }
   }
 
-  MoveDirection handleColorChange(ColorChange colChange, Position currentGoal){
-    if(colChange.player != playerNumber){
-      //update representation or something similar...
+  // ======= Paint Representation =======
 
-      System.out.println("other colorChange...");
-      System.out.println(colChange.toString());
-      //System.out.println(
-      //    "colorChange: player: "+ colChange.player
-      //    +", bot:"+colChange.bot
-      //    +", x: "+colChange.x
-      //    +", y: "+colChange.y);
-      return null;
+  BufferedImage getRepresentation(){
+    int width = 1024;
+    int height = 1024;
+    BufferedImage bi = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 
-    } else {
-      //player is me
-      System.out.println("my colorChange...");
-      System.out.println(colChange.toString());
-
-      Position currentPosition = new Position(colChange.x, colChange.y);
-      //check if goal for certain bot was reached
-      if(goalWasReached(colChange.bot, currentPosition, currentGoal)){
-        return nextMoveDirection(colChange.bot, currentPosition);
+    for(int x = 0; x < width; x++){
+      for (int y = 0; y < height; y++){
+        bi.setRGB(x, y, getBoard(new Position(x, y)));
       }
-      //Set/update own bots move direction
     }
 
+    return bi;
+  }
+
+  static class Painter {
+    private JFrame frame = new JFrame("Player's Board");
+    Painter(KipifubClient kipifubClient){
+      frame.setSize(1024,1024);
+      frame.setVisible(true);
+      frame.add(new ImagePanel(kipifubClient));
+      frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+    }
+
+    private class ImagePanel extends JPanel {
+
+      private KipifubClient kipifubClient;
+
+      public ImagePanel(KipifubClient kipifubClient) {
+        this.kipifubClient = kipifubClient;
+      }
+
+      @Override
+      protected void paintComponent(Graphics g) {
+        BufferedImage image = kipifubClient.getRepresentation();
+        super.paintComponent(g);
+        g.drawImage(image, 0, 0, 1024, 1024, this);
+        System.out.println("drawing some shit");
+      }
+    }
+  }
+
+  //========= Methods ===========
+
+  private MoveDirection handleColorChange(ColorChange colChange, Position currentGoal){
+    //update representation or something similar...
+
+    System.out.println(colChange.toString());
+
+    if(colChange.player == playerNumber) {
+      Position currentPosition = new Position(colChange.x, colChange.y);
+      //check if goal for certain bot was reached
+      if (goalWasReached(colChange.bot, currentPosition, currentGoal)) {
+        return nextMoveDirection(colChange.bot, currentPosition);
+      }
+      if( currentGoal.x == 0 && currentGoal.y == 0){
+        return nextMoveDirection(colChange.bot, currentPosition);
+      }
+    }
     return null;
   }
 
 
   //method for determining if goal was reached
-  static boolean goalWasReached(int bot, Position currentPos, Position goal){
+  private static boolean goalWasReached(int bot, Position currentPos, Position goal){
     return (currentPos.x <= goal.x+10)
         && (currentPos.y <= goal.y+10)
         && (currentPos.x >= goal.x-10)
         && (currentPos.y >= goal.y-10);
   }
 
-  MoveDirection nextMoveDirection(int bot, Position currentPosition){
+  private MoveDirection nextMoveDirection(int bot, Position currentPosition){
     Position scaledPos = new Position(currentPosition.x/nodeSpacing, currentPosition.y/nodeSpacing);
     // check up, left, bottom, right for walkability
     Position newGoal = null;
@@ -134,35 +177,38 @@ public class KipifubClient {
     }
 
     if(newGoal != null){
+      System.out.println("walk to goal with bot:"+ bot +"; current: "+ currentPosition.x + ", "+ currentPosition.y+"; new Goal: "+ newGoal.x
+      +", "+ newGoal.y);
       return walkToGoal(bot, currentPosition, newGoal);
     } else {
+      System.out.println("nothing walkable");
       //if nothing around pos is walkable...
       return null;
     }
   }
 
-  boolean isWalkableNode(Position nodePos){
-    return (graph[nodePos.x][nodePos.y] != null);
+  private boolean isWalkableNode(Position nodePos){
+    return (navigationNodes[nodePos.x][nodePos.y] != null);
   }
 
   //method for determining move direction according to goal and current position
-  static MoveDirection walkToGoal(int bot, Position currPosition, Position goal){
+  private static MoveDirection walkToGoal(int bot, Position currPosition, Position goal){
     // -currPosition + goal --> move direction vector
     Position moveDirection = new Position(goal.x - currPosition.x, goal.y - currPosition.y);
     return new MoveDirection(bot, goal, moveDirection);
   }
 
-  AreaNode[][] calcNavGraph(NetworkClient networkClient, int nodeSpacing){
-    //create graph for board
+  private NavNode[][] calcNavGraph(NetworkClient networkClient, int nodeSpacing){
+    //create navigationNodes for board
     int numberOfNodes = 1024/nodeSpacing;
-    AreaNode[][] graph = new AreaNode[numberOfNodes][numberOfNodes];
+    NavNode[][] graph = new NavNode[numberOfNodes][numberOfNodes];
 
     for(int x = 0; x < numberOfNodes; x++){
       for(int y = 0; y < numberOfNodes; y++){
         if(networkClient.isWalkable(x*nodeSpacing,y*nodeSpacing)){
           System.out.println("scaled x: "+x*nodeSpacing +", scaled y: "+ y*nodeSpacing+" is walkable");
           //make node, write node in list of nodes...
-          AreaNode n = new AreaNode(x, y);
+          NavNode n = new NavNode(x+nodeSpacing/2, y+nodeSpacing/2);
           graph[x][y] = n;
         }
       }
@@ -196,7 +242,7 @@ public class KipifubClient {
   }
 
   private int getBoard(Position pos){
-    return board[pos.x][pos.y];
+    return networkClient.getBoard(pos.x, pos.y);
   }
 
   private static int calcMeanColor(int[] colors){
@@ -222,71 +268,153 @@ public class KipifubClient {
     return mean.getRGB();
   }
 
+  //Manhattan Distance
+  private static int getDistance(int col1, int col2){
+    int r1 = (col1 >> 16) & 255;
+    int g1 = (col1 >> 8) & 255;
+    int b1 = col1  & 255;
+    int r2 = (col2 >> 16) & 255;
+    int g2 = (col2 >> 8) & 255;
+    int b2 = col2 & 255;
 
-  //todo create modified quad tree
+    return Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+  }
+
+  private int getPlayerColor(){
+    if(playerNumber == 0){
+      return Color.RED.getRGB();
+    }
+    if(playerNumber == 1){
+      return Color.GREEN.getRGB();
+    }
+    if(playerNumber == 2){
+      return Color.BLUE.getRGB();
+    }
+    else {
+      throw new IllegalStateException("player number: "+playerNumber+" has been initialised wrongly. Should be 0,1 or 2.");
+    }
+  }
+
+ //============ Classes =============
 
   // Quad Tree Node
-  static class QTNode {
-    int depth;//depth of tree node
-    // while 0 depth means this node is a child
+  class QTNode {
+    int depth;//depth of tree node; while 0 depth means this node is a child
+    int size;//this area's width or height, same since it's a square
+    Position origin;//this nodes origin; area's center
 
-    int width;//this area's width
-    int height;//this area's height
-    Position position;//this nodes origin; area's center
-
-    Position upperLeft = new Position(position.x - width/2, position.y - height/2); //include in area
-    Position lowerRight = new Position(position.x + width/2 + width%2, position.y + height/2 + height%2); //exclude from area
-
+    Position upperLeft;
+    Position lowerRight;
     //mean color of the QTNode's area
-    int meanColor;
+    private int meanColor;
 
-    //nodes from graph that belong to the quad tree element's area
-    List<AreaNode> areaNodes;
+    //nodes from navigationNodes that belong to the quad tree element's area
+    List<NavNode> navNodes = new ArrayList<>();
 
     //contains the QTNodes which contain information of this nodes subdivisions
     //if empty, then this node contains an area with smallest configured resolution
-    List<QTNode> children;
+    List<QTNode> children = new ArrayList<>();
 
-    QTNode(){
-      //todo setup meanColor, updateMeanColor();
-      //todo create children (if needed), depending on "depth" of the quad tree
+    // ==== constructor ====
+    QTNode(int depth, Position origin, int size){
+      this.depth = depth;
+      this.origin = origin;
+      this.size = size;
+
+      upperLeft = new Position(origin.x - size/2, origin.y - size/2); //include in area
+      lowerRight = new Position(origin.x + size/2 + size%2, origin.y + size/2 + size%2); //exclude from area
+
+      if(this.depth > 0){
+        //create own children recursively
+        children.add(new QTNode(depth-1, new Position(origin.x - size/4, origin.y - size/4), size/2));
+        children.add(new QTNode(depth-1, new Position(origin.x - size/4, origin.y + size/4), size/2));
+        children.add(new QTNode(depth-1, new Position(origin.x + size/4, origin.y - size/4), size/2));
+        children.add(new QTNode(depth-1, new Position(origin.x + size/4, origin.y + size/4), size/2));
+      }
+
+      //Initialize navNodes that lie in this QTNodes area
+      for(int i = 0; i < navigationNodes.length; i++){
+        for(int j = 0; j< navigationNodes[i].length; j++){
+          if(navigationNodes[i][j] != null && contains(navigationNodes[i][j].position)){
+            navNodes.add(navigationNodes[i][j]);
+          }
+        }
+      }
     }
+    // ====================
 
-    void updateMeanColor(Position hit){
-      if((hit.x >= upperLeft.x && hit.y >= upperLeft.y)&&(hit.x < lowerRight.x && hit.y < lowerRight.y)){
-        //update mean color of children
-        int[] colors = new int[children.size()];
-        int i = 0;
+    int getMeanColor(){
+      //update mean color of children
+      int[] colors;
+      int i = 0;
 
-        for(QTNode child : children){
-          child.updateMeanColor(hit);
-          //the mean color of the child should be the updated mean color now
-          colors[i] = child.meanColor;
+      if(children.size() == 0){//end of recursion
+        colors = new int[navNodes.size()];
+        for(NavNode navNode: navNodes){
+          colors[i] = navNode.getMeanColor();
           i++;
         }
+      }
 
-        meanColor = calcMeanColor(colors);
+      else{
+        colors = new int[children.size()];
+        for(QTNode child : children){
+          //the mean color of the child should be the updated mean color now
+          colors[i] = child.getMeanColor();
+          i++;
+        }
+      }
+
+      return calcMeanColor(colors);
+    }
+
+    boolean contains(Position pos){
+      return ((pos.x >= upperLeft.x && pos.y >= upperLeft.y)&&(pos.x < lowerRight.x && pos.y < lowerRight.y));
+    }
+
+    //void updateMeanColor(Position hit){
+    //  if(contains(hit)){
+    //    //meanColor = calcMeanColor(colors);
+    //  }
+    //}
+
+    NavNode getMostInteresting(){
+      if(children != null ){//recursion anchor
+        return navNodes.get(navNodes.size()/2);//median of navNodes todo maybe adjust
+      }
+      else {
+      //find child with most interesting mean color
+      QTNode interesting = children.get(0);
+
+      for(int i = 1; i < children.size(); i++){
+        QTNode child = children.get(i);
+        if(getDistance(child.getMeanColor(), getPlayerColor()) > getDistance(interesting.getMeanColor(), getPlayerColor())){
+          interesting = child;
+        }
+      }
+      return interesting.getMostInteresting();
       }
     }
 
   }
 
   /**
-   * AreaNode Class
+   * NavNode Class
    * Stores information of an area
+   * mainly used for navigation
    * including:
    *   position,
    *   mean color and
    *   direct neighbors
    */
-  class AreaNode {
+  class NavNode {
     final Position position;
     final Position upperLeft;
     final Position bottomRight;
 
-    List<AreaNode> neighbors = new ArrayList<>();
+    List<NavNode> neighbors = new ArrayList<>();
 
-    AreaNode(int x, int y){
+    NavNode(int x, int y){
       this.position = new Position(x, y);
       this.upperLeft = new Position(
           position.x - (nodeSpacing/2),
@@ -302,7 +430,7 @@ public class KipifubClient {
      * If area size is one pixel, the color of that pixel is
      * returned. Otherwise the mean color of the area is
      * calculated in calcMeanColor.
-     * @return mean color of this areaNode's pixels
+     * @return mean color of this navNode's pixels
      */
     public int getMeanColor(){
       if(nodeSpacing > 1){
