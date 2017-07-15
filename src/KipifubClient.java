@@ -27,6 +27,8 @@ import java.util.List;
  */
 
 public class KipifubClient {
+  final static int size = 1024;
+
   int playerNumber;
   NavNode[][] navigationNodes;
   int nodeSpacing;
@@ -37,6 +39,9 @@ public class KipifubClient {
     this.nodeSpacing = nodeSpacing;
     this.navigationNodes = calcNavGraph(networkClient, nodeSpacing);
     this.networkClient = networkClient;
+
+    //initialize quad tree
+    QTNode qtRoot = new QTNode(2, new Position(size/2, size/2), size);
   }
 
   public static void main(String[] args) {
@@ -51,6 +56,10 @@ public class KipifubClient {
 
     Position currentGoal = new Position(0,0);
     ColorChange colorChange;
+
+
+
+
     while(networkClient.isAlive()) {
 
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
@@ -107,10 +116,8 @@ public class KipifubClient {
         g.drawImage(image, 0, 0, 1024, 1024, this);
         System.out.println("drawing some shit");
       }
-
     }
   }
-
 
   //========= Methods ===========
 
@@ -288,7 +295,6 @@ public class KipifubClient {
     }
   }
 
-  //todo create modified quad tree
  //============ Classes =============
 
   // Quad Tree Node
@@ -329,7 +335,7 @@ public class KipifubClient {
       //Initialize navNodes that lie in this QTNodes area
       for(int i = 0; i < navigationNodes.length; i++){
         for(int j = 0; j< navigationNodes[i].length; j++){
-          if(contains(navigationNodes[i][j].position)){
+          if(navigationNodes[i][j] != null && contains(navigationNodes[i][j].position)){
             navNodes.add(navigationNodes[i][j]);
           }
         }
