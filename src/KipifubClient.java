@@ -240,6 +240,86 @@ public class KipifubClient {
 
     return graph;
   }
+  
+  public NavNode aStern(NavNode[][] nodes, NavNode startPos, NavNode goalPos){
+	
+  	List<NavNode> openList = new ArrayList<NavNode>();
+	List<NavNode> closedList = new ArrayList<NavNode>();
+	
+	//add start Node
+	openList.add(startPos);
+	
+	while (!openList.isEmpty()){
+		
+		// search and remove node from openList with smallest coasts
+		NavNode current = openList.get(0);
+		int currentIdx = 0;
+		for (int i=0; i < openList.size(); i++){
+			if (openList.get(i).getWeight() < current.getWeight()){
+				current = openList.get(i);
+				currentIdx = i;
+			}
+		}
+		openList.remove(currentIdx);
+		
+		// goal reached?
+		if (current == goalPos) {
+			return current; 
+		}
+		
+		// for all neighbors
+		for (int i=0; i < current.neighbors.size(); i++){
+		//if (!current.neighbors.get(i).getOccupied()){ // neighbors are always free
+			// is neighbor already in closedList?
+			boolean inClosedList = false;
+			for (NavNode node : closedList) {
+				if (node == current.neighbors.get(i)) inClosedList = true;
+			}
+			if (!inClosedList){
+				// is neighbor already in openList?
+				boolean inOpenList = false;
+				for (NavNode node : openList) {
+					if (node == current.neighbors.get(i)) inOpenList = true;
+				}
+				if (!inOpenList){
+					current.neighbors.get(i).setWeight(Integer.MAX_VALUE);
+					openList.add(current.neighbors.get(i));
+				}
+				if (current.getWeight() < current.neighbors.get(i).getWeight()){ 
+					current.neighbors.get(i).setWeight(calcEukDistance(current.neighbors.get(i), goalPos));
+					current.neighbors.get(i).setParent(current);
+					// goal reached?
+					if (current.neighbors.get(i) == goalPos) {
+						return current.neighbors.get(i); 
+					}
+				}
+			}
+		//}
+		}
+		closedList.add(current);
+	}
+	System.out.println("No path was found!");
+	return null;
+  }
+  
+  private int calcEukDistance(NavNode startPos, NavNode goalPos){
+	return (int) Math.sqrt((Math.pow((startPos.position.x - goalPos.position.x), 2) + Math.pow((startPos.position.y - goalPos.position.y), 2))); 
+  }
+  
+  public List<NavNode> createPathtoTarget(NavNode targetNode){
+	if (targetNode == null){
+		System.out.println("No target available to create a path to!");
+		return null;
+	} else {
+		List<NavNode> path = new ArrayList<>();
+		NavNode current = targetNode;
+		while (current.getParent() != null) {
+			path.add(current);
+			current = current.getParent();
+		}
+		return path;
+	}
+  }
 
   private int getBoard(Position pos){
     return networkClient.getBoard(pos.x, pos.y);
@@ -411,6 +491,8 @@ public class KipifubClient {
     final Position position;
     final Position upperLeft;
     final Position bottomRight;
+    int weight;
+    NavNode parent;
 
     List<NavNode> neighbors = new ArrayList<>();
 
@@ -422,8 +504,24 @@ public class KipifubClient {
       this.bottomRight = new Position(
           position.x + (nodeSpacing/2) + (nodeSpacing%2),
           position.y + (nodeSpacing/2) + (nodeSpacing%2));
+      this.weight = 1;
     }
 
+    public int getWeight(){
+    	return this.weight;
+    }
+    
+    public void setWeight(int weight){
+    	this.weight = weight;
+    }
+    
+    public NavNode getParent(){
+    	return this.parent;
+    }
+    
+    public void setParent(NavNode parent){
+    	this.parent = parent;
+    }
     /**
      * Call from outside to always get up-to-date mean color
      * (not cached)
