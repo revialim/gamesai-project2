@@ -75,6 +75,16 @@ public class KipifubClient {
     //System.out.println("player navNodes at 0, 0"+ ((
     //    colorTest2 >> 16)&255) );
 
+    for(NavNode[] nArr : player.navigationNodes){
+      for(NavNode node: nArr){
+        if(node != null){
+          System.out.println("x: "+ node.position.x +", y: "+ node.position.y
+              +" mean color: "+ ((node.getMeanColor() >> 16) & 255));
+          //System.out.println("node mean colors (red): "+
+          //    );
+        }
+      }
+    }
 
     while(networkClient.isAlive()) {
 
@@ -89,16 +99,6 @@ public class KipifubClient {
           currentGoal = new Position(nextMove.goal.x, nextMove.goal.y);
         }
 
-      }
-
-      for(NavNode[] nArr : player.navigationNodes){
-        for(NavNode node: nArr){
-          if(node != null){
-            //System.out.println("x: "+ node.position.x +", y: "+ node.position.y +" mean color: "+ );
-            //System.out.println("node mean colors (red): "+
-            //    ((node.getMeanColor() >> 16) & 255));
-          }
-        }
       }
 
       //NavNode mostinteresting = player.qtRoot.children.get(0).getMostInteresting();
@@ -238,10 +238,10 @@ public class KipifubClient {
 
     for(int x = 0; x < numberOfNodes; x++){
       for(int y = 0; y < numberOfNodes; y++){
-        if(networkClient.isWalkable(x*nodeSpacing,y*nodeSpacing)){
+        if(networkClient.isWalkable(x*nodeSpacing+nodeSpacing/2,y*nodeSpacing+nodeSpacing/2)){
           //System.out.println("scaled x: "+x*nodeSpacing +", scaled y: "+ y*nodeSpacing+" is walkable");
           //make node, write node in list of nodes...
-          NavNode n = new NavNode(x+nodeSpacing/2, y+nodeSpacing/2);
+          NavNode n = new NavNode(x*nodeSpacing+nodeSpacing/2, y*nodeSpacing+nodeSpacing/2);
           graph[x][y] = n;
         }
       }
@@ -251,7 +251,7 @@ public class KipifubClient {
       for(int y = 0; y < numberOfNodes; y++) {
         if (graph[x][y] != null) {
           //node above
-          if (graph[x][y - 1] != null) {
+          if (y > 0 && graph[x][y - 1] != null) {
             graph[x][y].neighbors.add(graph[x][y - 1]);
           }
           //node left
@@ -367,16 +367,17 @@ public class KipifubClient {
     int b = 0;
 
     for(int color : colors){
-      //the mean color of the child should be the updated mean color now
-      r = r + (color >> 16) & 255;
-      g = g + (color >> 8) & 255;
-      b = b + color  & 255;
+      r = r + ((color >> 16) & 255);
+      g = g + ((color >> 8)  & 255);
+      b = b + ( color        & 255);
       sum++;
+
+     // System.out.println("r: "+ r + ", g: "+g+", b: "+b);
     }
 
-    r = (r == 0)? r : r/sum;
-    g = (g == 0)? g : g/sum;
-    b = (b == 0)? b : b/sum;
+    r = r/sum;
+    g = g/sum;
+    b = b/sum;
 
     Color mean = new Color(r, g, b);
 
@@ -591,13 +592,15 @@ public class KipifubClient {
           //new int[(end.x-start.x+1)*(end.y-start.y+1)];
       int i = 0;
 
+      //System.out.println("start calc array");
       for(int x = start.x; x <= end.x; x++){
         for(int y = start.y; y <= end.y; y++){
           colors[i] = getBoard(new Position(x, y));
-          //System.out.println("nav node some color red part: "+ ((colors[i] >> 16) & 255) );
           i++;
         }
       }
+
+      //System.out.println(" nav node some color red part: "+ ((colors[0] >> 16) & 255) );
 
       return KipifubClient.calcMeanColor(colors);
     }
