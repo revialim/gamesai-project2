@@ -53,8 +53,9 @@ public class KipifubClient {
 
     //new Painter(player); //todo
 
-    Position currentGoal = new Position(0,0);
+    Position currentGoal = new Position(0,0); // TODO initializing directly with most interesting
     ColorChange colorChange;
+    List<NavNode> path = new ArrayList<>();
 
     List<NavNode> mostInterestingNodes;
     List<NavNode> pathToGoal = new ArrayList<>();
@@ -135,7 +136,6 @@ public class KipifubClient {
   }
 
   //========= Methods ===========
-
   /**
    * @param qtNode , most probably a QuadTree root
    * @return a List of NavNodes containing the mostInteresting nodes
@@ -172,13 +172,11 @@ public class KipifubClient {
         } else {
           nextToMinIndex = i;
         }
-      }
-    }
 
+    }
     return walkToGoal(bot, currentPos, path.get(nextToMinIndex).position);
 
   }
-
   private NavNode getTarget(Position currentPosition, Position goalPosition){
     Position scaledPos = new Position(currentPosition.x/nodeSpacing, currentPosition.y/nodeSpacing);
     Position scaledGoal = new Position(goalPosition.x/nodeSpacing, goalPosition.y/nodeSpacing);
@@ -247,7 +245,6 @@ public class KipifubClient {
   //  return walkToGoal(bot, currentPosition, path.get(path.size()-1).position);
   //  //return walkToGoal(bot, currentPosition, path.get(0).position);
     
-
     //List<Position> possibleGoals = new ArrayList<>();
 
     //if(isWalkableNode(new Position(scaledPos.x-1, scaledPos.y))){
