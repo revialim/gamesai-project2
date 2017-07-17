@@ -164,15 +164,15 @@ public class KipifubClient {
     for(int i = 0; i < path.size(); i++){
       NavNode checkpoint = path.get(i);
       int tmpDist = calcEukDistance(checkpoint.position, currentPos);
-      if(tmpDist < minDist){
+      if(tmpDist < minDist) {
         minDist = tmpDist;
         closestCheckpoint = checkpoint;
-        if(i < path.size()-1){
-          nextToMinIndex = i+1;
+        if (i < path.size() - 1) {
+          nextToMinIndex = i + 1;
         } else {
           nextToMinIndex = i;
         }
-
+      }
     }
     return walkToGoal(bot, currentPos, path.get(nextToMinIndex).position);
 
