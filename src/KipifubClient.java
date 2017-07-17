@@ -89,18 +89,34 @@ public class KipifubClient {
     while(networkClient.isAlive()) {
 
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
+    	  
+    	  // calculating new interesting positions
+	      List<NavNode> mostInteresting = new ArrayList<>();
+	      for (int i=0; i < 4; i++){
+	      	mostInteresting.add(player.qtRoot.children.get(i).getMostInteresting());
+	      }
+	      Collections.sort(mostInteresting);
+	      /*
+	      for (int i=0; i < 4; i++){
+	    	  System.out.println(i + " goal value:  " + mostInteresting.get(i).getMeanColor() 
+	    			  				+ " on position:  " + mostInteresting.get(i).position.x + " / " + mostInteresting.get(i).position.y);
+	      }
+	      */
+	      currentGoal = mostInteresting.get(0).position;
+	      
 
         //verarbeiten von colorChange
         MoveDirection nextMove = player.handleColorChange(colorChange, currentGoal);
 
         if(nextMove != null){
-          //set or update move direction and currentGoal information
+        	System.out.println("Next Move is: " + nextMove.bot + " ; " + nextMove.direction.x + "/" + nextMove.direction.y + " ; " + nextMove.goal.x + "/" + nextMove.goal.y);
+        	//set or update move direction and currentGoal information
           networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
           currentGoal = new Position(nextMove.goal.x, nextMove.goal.y);
         }
-
+        
       }
-
+      
       //NavNode mostinteresting = player.qtRoot.children.get(0).getMostInteresting();
       //Color col = new Color(player.qtRoot.children.get(0).getMeanColor());
       //System.out.println("meancolor of child 0: "+col.getRed()+", "+col.getGreen()+", "+col.getBlue());
@@ -162,12 +178,13 @@ public class KipifubClient {
       Position currentPosition = new Position(colChange.x, colChange.y);
       //check if goal for certain bot was reached
       if (goalWasReached(currentPosition, currentGoal)) {
-        return nextMoveDirection(colChange.bot, currentPosition);
+        return nextMoveDirection(colChange.bot, currentPosition, currentGoal);
       }
       if( currentGoal.x == 0 && currentGoal.y == 0){
-        return nextMoveDirection(colChange.bot, currentPosition);
+        return nextMoveDirection(colChange.bot, currentPosition, currentGoal);
       }
     }
+    System.out.println("Colorhandling without results...");
     return null;
   }
 
@@ -180,10 +197,30 @@ public class KipifubClient {
         && (currentPos.y >= goal.y-10);
   }
 
-  private MoveDirection nextMoveDirection(int bot, Position currentPosition){
+  private MoveDirection nextMoveDirection(int bot, Position currentPosition, Position goalPosition){
     Position scaledPos = new Position(currentPosition.x/nodeSpacing, currentPosition.y/nodeSpacing);
     // check up, left, bottom, right for walkability
-    Position newGoal = null;
+    Position newGoal = new Position(goalPosition.x/nodeSpacing, goalPosition.y/nodeSpacing);
+    
+    // TODO how to handle length of axies, are all points reached?
+    for(int i=0; i < navigationNodes.length; i++){
+    	for(int j=0; j < navigationNodes.length; j++){
+    		navigationNodes[i][j].setWeight(calcEukDistance(navigationNodes[i][j].position, newGoal));
+    	}
+    }
+    
+    NavNode target = aStern(navigationNodes, navigationNodes[scaledPos.x][scaledPos.y], navigationNodes[newGoal.x][newGoal.y]);
+    
+    System.out.println("A-Star target is: " + target.position.x + " / " + target.position.y);
+    
+    List<NavNode> path =  createPathtoTarget(target);
+    
+    System.out.println("New Goal is: " + path.get(0).position.x + " / " + path.get(0).position.y);
+    
+    //return new MoveDirection(bot, newGoal, path.get(0).position);
+    return walkToGoal(bot, scaledPos, newGoal);
+    
+    /*
     List<Position> possibleGoals = new ArrayList<>();
 
     if(isWalkableNode(new Position(scaledPos.x-1, scaledPos.y))){
@@ -218,6 +255,7 @@ public class KipifubClient {
       //if nothing around pos is walkable...
       return null;
     }
+    */
   }
 
   private boolean isWalkableNode(Position nodePos){
@@ -319,7 +357,7 @@ public class KipifubClient {
 					openList.add(current.neighbors.get(i));
 				}
 				if (current.getWeight() < current.neighbors.get(i).getWeight()){ 
-					current.neighbors.get(i).setWeight(calcEukDistance(current.neighbors.get(i), goalPos));
+					current.neighbors.get(i).setWeight(calcEukDistance(current.neighbors.get(i).position, goalPos.position));
 					current.neighbors.get(i).setParent(current);
 					// goal reached?
 					if (current.neighbors.get(i) == goalPos) {
@@ -335,8 +373,8 @@ public class KipifubClient {
 	return null;
   }
   
-  private int calcEukDistance(NavNode startPos, NavNode goalPos){
-	return (int) Math.sqrt((Math.pow((startPos.position.x - goalPos.position.x), 2) + Math.pow((startPos.position.y - goalPos.position.y), 2))); 
+  private int calcEukDistance(Position startPos, Position goalPos){
+	return (int) Math.sqrt((Math.pow((startPos.x - goalPos.x), 2) + Math.pow((startPos.y - goalPos.y), 2))); 
   }
   
   public List<NavNode> createPathtoTarget(NavNode targetNode){
@@ -349,6 +387,9 @@ public class KipifubClient {
 		while (current.getParent() != null) {
 			path.add(current);
 			current = current.getParent();
+		}
+		for(NavNode node: path){
+			System.out.println("Path node pos: " + node.position.x + " / " + node.position.y);
 		}
 		return path;
 	}
@@ -531,7 +572,7 @@ public class KipifubClient {
    *   mean color and
    *   direct neighbors
    */
-  class NavNode {
+  class NavNode implements Comparable<NavNode> {
     final Position position;
     final Position upperLeft;
     final Position bottomRight;
@@ -605,6 +646,28 @@ public class KipifubClient {
       return KipifubClient.calcMeanColor(colors);
     }
 
+	public int compareTo(NavNode node) {
+    	int compareColor = calcMeanColor(node.upperLeft, node.bottomRight);
+    	return calcMeanColor(this.upperLeft, this.bottomRight) - compareColor; //ascending order
+    	//return compareColor - calcMeanColor(this.upperLeft, this.bottomRight); //descending order
+	}
+	/*
+	public Comparator<NavNode> NavNodeComparator = new Comparator<NavNode>() {
+	
+	public int compare(NavNode fruit1, NavNode fruit2) {
+	
+		int fruitName1 = fruit1.calcMeanColor(fruit2.upperLeft, fruit2.bottomRight);
+		int fruitName2 = fruit2.calcMeanColor(fruit2.upperLeft, fruit2.bottomRight);
+		
+		//ascending order
+		return fruitName1.compareTo(fruitName2);
+		
+		//descending order
+		//return fruitName2.compareTo(fruitName1);
+	}
+	
+	};
+	 */
   }
 
   static class MoveDirection {
