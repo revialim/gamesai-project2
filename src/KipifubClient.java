@@ -177,14 +177,15 @@ public class KipifubClient {
     if(colChange.player == playerNumber) {
       Position currentPosition = new Position(colChange.x, colChange.y);
       //check if goal for certain bot was reached
-      if (goalWasReached(currentPosition, currentGoal)) {
+      //System.out.println("currentPos: " + colChange.x + "/" + colChange.y);
+      //System.out.println("currentGoal: " + currentGoal.x + "/" + currentGoal.y);
+      if (!goalWasReached(currentPosition, currentGoal)) {
         return nextMoveDirection(colChange.bot, currentPosition, currentGoal);
       }
       if( currentGoal.x == 0 && currentGoal.y == 0){
         return nextMoveDirection(colChange.bot, currentPosition, currentGoal);
       }
     }
-    System.out.println("Colorhandling without results...");
     return null;
   }
 
@@ -202,23 +203,26 @@ public class KipifubClient {
     // check up, left, bottom, right for walkability
     Position newGoal = new Position(goalPosition.x/nodeSpacing, goalPosition.y/nodeSpacing);
     
-    // TODO how to handle length of axies, are all points reached?
+    // TODO add color multiplication to weight
     for(int i=0; i < navigationNodes.length; i++){
-    	for(int j=0; j < navigationNodes.length; j++){
-    		navigationNodes[i][j].setWeight(calcEukDistance(navigationNodes[i][j].position, newGoal));
+    	for(int j=0; j < navigationNodes[i].length; j++){
+    		if (navigationNodes[i][j] != null)
+    			navigationNodes[i][j].setWeight(calcEukDistance(navigationNodes[i][j].position, newGoal));
     	}
     }
     
     NavNode target = aStern(navigationNodes, navigationNodes[scaledPos.x][scaledPos.y], navigationNodes[newGoal.x][newGoal.y]);
     
-    System.out.println("A-Star target is: " + target.position.x + " / " + target.position.y);
+    //System.out.println("A-Star target is: " + target.position.x + " / " + target.position.y);
     
     List<NavNode> path =  createPathtoTarget(target);
     
-    System.out.println("New Goal is: " + path.get(0).position.x + " / " + path.get(0).position.y);
+    //System.out.println("New Goal is: " + path.get(0).position.x + " / " + path.get(0).position.y);
     
     //return new MoveDirection(bot, newGoal, path.get(0).position);
-    return walkToGoal(bot, scaledPos, newGoal);
+    // TODO must it be first or last path point ?
+    //return walkToGoal(bot, currentPosition, path.get(path.size()-1).position); 
+    return walkToGoal(bot, currentPosition, path.get(0).position); 
     
     /*
     List<Position> possibleGoals = new ArrayList<>();
@@ -357,7 +361,7 @@ public class KipifubClient {
 					openList.add(current.neighbors.get(i));
 				}
 				if (current.getWeight() < current.neighbors.get(i).getWeight()){ 
-					current.neighbors.get(i).setWeight(calcEukDistance(current.neighbors.get(i).position, goalPos.position));
+					current.neighbors.get(i).setWeight(calcEukDistance(current.neighbors.get(i).position, goalPos.position)); // TODO
 					current.neighbors.get(i).setParent(current);
 					// goal reached?
 					if (current.neighbors.get(i) == goalPos) {
@@ -388,9 +392,11 @@ public class KipifubClient {
 			path.add(current);
 			current = current.getParent();
 		}
-		for(NavNode node: path){
-			System.out.println("Path node pos: " + node.position.x + " / " + node.position.y);
+		/*
+		for(int i=0; i < path.size(); i++){
+			System.out.println("Path node " + i +" pos: " + path.get(i).position.x + " / " + path.get(i).position.y);
 		}
+		*/
 		return path;
 	}
   }
@@ -648,8 +654,8 @@ public class KipifubClient {
 
 	public int compareTo(NavNode node) {
     	int compareColor = calcMeanColor(node.upperLeft, node.bottomRight);
-    	return calcMeanColor(this.upperLeft, this.bottomRight) - compareColor; //ascending order
-    	//return compareColor - calcMeanColor(this.upperLeft, this.bottomRight); //descending order
+    	//return calcMeanColor(this.upperLeft, this.bottomRight) - compareColor; //ascending order
+    	return compareColor - calcMeanColor(this.upperLeft, this.bottomRight); //descending order
 	}
 	/*
 	public Comparator<NavNode> NavNodeComparator = new Comparator<NavNode>() {
