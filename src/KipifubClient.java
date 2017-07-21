@@ -75,7 +75,7 @@ public class KipifubClient {
         +", currentgoal: "+ currentGoal.x + ", "+ currentGoal.y
         +", currentpos: "+currentPos.x +", "+ currentPos.y);
 
-        if((pathToGoal.size() == 0) | goalWasReached(currentPos, currentGoal)){     	
+        if((pathToGoal.size() == 0) || goalWasReached(currentPos, currentGoal)){
           //calculate new goal, and new path to goal
           mostInterestingNodes = player.getInterestingNavNodes(player.qtRoot);
 
@@ -92,12 +92,12 @@ public class KipifubClient {
 
     	  MoveDirection nextMove = player.getNextMoveDirection(colorChange.bot, pathToGoal, currentPos);
 
-        //networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
-    	  if (Math.abs(nextMove.direction.x) > Math.abs(nextMove.direction.y)){
-    		  networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, 0);
-    	  } else {
-    		  networkClient.setMoveDirection(nextMove.bot,0, nextMove.direction.y);
-    	  }
+        networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
+    	  //if (Math.abs(nextMove.direction.x) > Math.abs(nextMove.direction.y)){
+    		//  networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, 0);
+    	  //} else {
+    		//  networkClient.setMoveDirection(nextMove.bot,0, nextMove.direction.y);
+    	  //}
       }
     }
   }
