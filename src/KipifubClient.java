@@ -92,12 +92,12 @@ public class KipifubClient {
 
     	  MoveDirection nextMove = player.getNextMoveDirection(colorChange.bot, pathToGoal, currentPos);
 
-        networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
-    	  //if (Math.abs(nextMove.direction.x) > Math.abs(nextMove.direction.y)){
-    		//  networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, 0);
-    	  //} else {
-    		//  networkClient.setMoveDirection(nextMove.bot,0, nextMove.direction.y);
-    	  //}
+        //networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
+    	  if (Math.abs(nextMove.direction.x) > Math.abs(nextMove.direction.y)){
+    		  networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, 0);
+    	  } else {
+    		  networkClient.setMoveDirection(nextMove.bot,0, nextMove.direction.y);
+    	  }
       }
     }
   }
