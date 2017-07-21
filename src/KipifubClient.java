@@ -70,12 +70,12 @@ public class KipifubClient {
       while ((colorChange = networkClient.pullNextColorChange()) != null) {
         Position currentPos = new Position(colorChange.x, colorChange.y);
 
-        System.out.println("goalwasReached: "+ goalWasReached(currentPos, currentGoal)
+        System.out.println("Player / bot: "+ colorChange.player + " - "+ colorChange.bot
+        +", goalwasReached: "+ goalWasReached(currentPos, currentGoal)
         +", currentgoal: "+ currentGoal.x + ", "+ currentGoal.y
         +", currentpos: "+currentPos.x +", "+ currentPos.y);
 
-        if((pathToGoal.size() == 0) || goalWasReached(currentPos, currentGoal)){
-
+        if((pathToGoal.size() == 0) | goalWasReached(currentPos, currentGoal)){     	
           //calculate new goal, and new path to goal
           mostInterestingNodes = player.getInterestingNavNodes(player.qtRoot);
 
@@ -190,6 +190,7 @@ public class KipifubClient {
     
     if (goalWasReached(currentPos, path.get(path.size()-1).position) && path.size() != 1){
     	path.remove(path.size()-1);
+    	System.out.println("Reduced path size, new size: " + path.size() + ", next Pos: " + path.get(path.size()-1).position.x + " / " + path.get(path.size()-1).position.y);
     }
 
     for(int i = 0; i < path.size(); i++){
@@ -363,6 +364,7 @@ public class KipifubClient {
       while (current.getParent() != null) {
         path.add(current);
         current = current.getParent();
+        //System.out.println(current.position.x + " / " + current.position.y);
       }
       return path;
     } else {
