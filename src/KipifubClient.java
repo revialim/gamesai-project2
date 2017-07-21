@@ -92,7 +92,12 @@ public class KipifubClient {
 
     	  MoveDirection nextMove = player.getNextMoveDirection(colorChange.bot, pathToGoal, currentPos);
 
-        networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
+        //networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, nextMove.direction.y);
+    	  if (Math.abs(nextMove.direction.x) > Math.abs(nextMove.direction.y)){
+    		  networkClient.setMoveDirection(nextMove.bot, nextMove.direction.x, 0);
+    	  } else {
+    		  networkClient.setMoveDirection(nextMove.bot,0, nextMove.direction.y);
+    	  }
       }
     }
   }
@@ -182,6 +187,10 @@ public class KipifubClient {
     int minDist = 1024 * 1024; //some large distance that is always bigger than a maximal distance of two points on the field
     int nextToMinIndex = 0;
     //NavNode closestCheckpoint = path.get(path.size()-1);
+    
+    if (goalWasReached(currentPos, path.get(path.size()-1).position) && path.size() != 1){
+    	path.remove(path.size()-1);
+    }
 
     for(int i = 0; i < path.size(); i++){
       NavNode checkpoint = path.get(i);
@@ -252,7 +261,7 @@ public class KipifubClient {
         if(networkClient.isWalkable(x*nodeSpacing+nodeSpacing/2,y*nodeSpacing+nodeSpacing/2)){
           NavNode n = new NavNode(x*nodeSpacing+nodeSpacing/2, y*nodeSpacing+nodeSpacing/2);
           graph[x][y] = n;
-        }
+        } 
       }
     }
     //add "edges", add neighboring nodes
