@@ -28,7 +28,7 @@ import java.util.List;
 
 public class KipifubClient {
   private final static int size = 1024;
-  private final static int qtDepth = 1;
+  private final static int qtDepth = 3;
   private final static int theSpacing = 20; //shouldn't be set bigger than 50 for accuracy
 
   private int playerNumber;
@@ -181,7 +181,7 @@ public class KipifubClient {
   //}
 
   private MoveDirection getNextMoveDirection(int bot, List<NavNode> path, Position currentPos){
-    //path at 0 is start, path at path.length-1 is end/goal of path
+    //path at 0 is goal, path at path.length-1 is start/ closest of path
     //find node on path closest to currentPosition
     //walk towards the node that comes after it
     int minDist = 1024 * 1024; //some large distance that is always bigger than a maximal distance of two points on the field
