@@ -391,9 +391,11 @@ public class KipifubClient {
      // System.out.println("r: "+ r + ", g: "+g+", b: "+b);
     }
 
-    r = r/sum;
-    g = g/sum;
-    b = b/sum;
+    if (sum != 0){
+	    r = r/sum;
+	    g = g/sum;
+	    b = b/sum;
+    }
 
     Color mean = new Color(r, g, b);
 
